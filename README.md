@@ -16,13 +16,23 @@ Full-stack authentication application built as a test task. Users can sign up, s
 | Frontend  | React 19, Vite 8, TypeScript 6, Tailwind CSS 4 |
 | Auth      | JWT access tokens (15m) + refresh tokens (7d) with rotation, bcrypt |
 
-## Prerequisites
+## Getting Started
 
-- **Node.js** >= 18
-- **npm** >= 9
-- **MongoDB** running locally (default: `mongodb://localhost:27017`)
+### Option 1: Docker (zero setup)
 
-## Quick Start
+**Prerequisites:** [Docker Desktop](https://docs.docker.com/get-docker/)
+
+```bash
+git clone https://github.com/YahyaIS/auth-task.git
+cd auth-task
+docker compose up
+```
+
+Open `http://localhost:5173` in your browser. MongoDB, the backend API (port 3000), and the frontend all start automatically.
+
+### Option 2: Manual Setup
+
+**Prerequisites:** Node.js >= 18, npm >= 9, MongoDB running locally
 
 ```bash
 # Clone the repository
