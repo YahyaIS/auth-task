@@ -1,98 +1,122 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Auth Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS 11 API with MongoDB, JWT authentication, and Swagger documentation.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Tech Stack
 
-## Description
+| Package               | Purpose                          |
+|-----------------------|----------------------------------|
+| `@nestjs/core`        | NestJS framework                 |
+| `@nestjs/mongoose`    | MongoDB ODM integration          |
+| `@nestjs/jwt`         | JWT signing & verification       |
+| `@nestjs/passport`    | Passport auth framework          |
+| `passport-jwt`        | JWT Bearer token strategy        |
+| `@nestjs/swagger`     | OpenAPI / Swagger documentation  |
+| `bcrypt`              | Password hashing                 |
+| `class-validator`     | DTO validation decorators        |
+| `mongoose`            | MongoDB object modeling          |
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Project Structure
 
-## Project setup
-
-```bash
-$ npm install
+```
+backend/
+├── src/
+│   ├── app.module.ts              # Root module (ConfigModule, MongooseModule, AuthModule)
+│   ├── main.ts                    # Global ValidationPipe + Swagger at /api
+│   ├── app.controller.ts          # GET /health
+│   ├── users/
+│   │   ├── schemas/user.schema.ts # User model (email, name, password), pre-save bcrypt hook, toJSON transform
+│   │   ├── dto/signup.dto.ts      # Email, name (min 3), password (8+ chars, letter+number+special)
+│   │   ├── dto/signin.dto.ts      # Email, password
+│   │   ├── dto/refresh.dto.ts     # Refresh token
+│   │   └── users.module.ts        # Registers User model
+│   └── auth/
+│       ├── auth.module.ts         # PassportModule + JwtModule (15m access, 7d refresh)
+│       ├── auth.service.ts        # signUp, signIn, refresh, getProfile
+│       ├── auth.controller.ts     # POST /auth/signup, /auth/signin, /auth/refresh, GET /auth/me
+│       ├── guards/jwt-auth.guard.ts
+│       └── strategies/jwt.strategy.ts # Bearer token extraction, payload validation
+├── test/
+│   ├── app.e2e-spec.ts            # E2E test for health endpoint
+│   └── jest-e2e.json
+├── .env.example
+└── package.json
 ```
 
-## Compile and run the project
+## Endpoints
 
-```bash
-# development
-$ npm run start
+| Method | Path              | Auth Required | Description                              |
+|--------|-------------------|---------------|------------------------------------------|
+| GET    | `/health`         | No            | Health check — returns `{ status: "ok" }`|
+| POST   | `/auth/signup`    | No            | Register a new user                      |
+| POST   | `/auth/signin`    | No            | Sign in with email and password          |
+| POST   | `/auth/refresh`   | No            | Exchange refresh token for a new pair    |
+| GET    | `/auth/me`        | Yes (Bearer)  | Get current user profile                 |
 
-# watch mode
-$ npm run start:dev
+Swagger docs available at `http://localhost:3000/api`.
 
-# production mode
-$ npm run start:prod
-```
+## Auth Flow
 
-## Run tests
+### Signup
+1. `POST /auth/signup` with `{ email, name, password }`
+2. Validated by `SignupDto` (class-validator)
+3. `AuthService.signUp()` creates user
+4. Pre-save hook hashes password with bcrypt (salt rounds: 10)
+5. Returns `{ user, access_token, refresh_token }`
+6. Duplicate email → `409 Conflict`
 
-```bash
-# unit tests
-$ npm run test
+### Signin
+1. `POST /auth/signin` with `{ email, password }`
+2. Queries user with `.select('+password')`
+3. `bcrypt.compare` plaintext vs stored hash
+4. Invalid email or password → `401 Unauthorized` (same error for both — no user enumeration)
+5. Returns `{ user, access_token, refresh_token }`
 
-# e2e tests
-$ npm run test:e2e
+### Refresh
+1. `POST /auth/refresh` with `{ refreshToken }`
+2. Verifies the JWT refresh token
+3. Invalid or expired → `401 Unauthorized`
+4. Returns new `{ access_token, refresh_token }` (rotated)
 
-# test coverage
-$ npm run test:cov
-```
+### Get Profile
+1. `GET /auth/me` with `Authorization: Bearer <token>`
+2. `JwtAuthGuard` validates token
+3. Returns `{ name, email }`
+4. Missing user → `401 Unauthorized`
 
-## Deployment
+## Token Details
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Token          | Type | Expiry | Rotation |
+|----------------|------|--------|----------|
+| `access_token` | JWT  | 15m    | Via refresh |
+| `refresh_token`| JWT  | 7d     | Rotated on each use |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Both contain payload `{ sub: userId, email }`, signed with `JWT_SECRET`.
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+## Security Measures
+- **Password field:** `select: false` — never returned from DB queries by default
+- **toJSON transform:** Strips password from serialization
+- **bcrypt pre-save hook:** Auto-hashes before persistence
+- **401 ambiguity:** Same error for invalid email or password (prevents user enumeration)
+- **Fails fast:** `getOrThrow('JWT_SECRET')` — startup fails if secret missing
+- **Global ValidationPipe:** `whitelist: true` + `forbidNonWhitelisted: true`
+- **Password regex:** Enforces complexity server-side (letter + number + special char)
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Environment Variables
 
-## Resources
+| Variable      | Description                  | Default                                        |
+|---------------|------------------------------|------------------------------------------------|
+| `PORT`        | Server port                  | `3000`                                         |
+| `MONGODB_URI` | MongoDB connection string    | `mongodb://localhost:27017/auth-task`          |
+| `JWT_SECRET`  | JWT signing secret           | (must be set in production)                    |
 
-Check out a few resources that may come in handy when working with NestJS:
+## Scripts
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+| Command             | Description               |
+|---------------------|---------------------------|
+| `npm run start:dev` | Start dev server (watch)  |
+| `npm run build`     | Build for production      |
+| `npm run start:prod`| Run production build      |
+| `npm run test`      | Unit tests                |
+| `npm run test:e2e`  | E2E tests                 |
+| `npm run lint`      | ESLint                    |
