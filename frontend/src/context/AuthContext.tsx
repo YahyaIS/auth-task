@@ -75,11 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [initialize])
 
   const login = useCallback(async (email: string, password: string) => {
-    const response = await api.post<{
+    const response = await axios.post<{
       user: User
       access_token: string
       refresh_token: string
-    }>('/auth/signin', { email, password })
+    }>(`${API_URL}/auth/signin`, { email, password })
 
     const { user, access_token, refresh_token } = response.data
     setAccessToken(access_token)
@@ -94,11 +94,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = useCallback(
     async (name: string, email: string, password: string) => {
-      const response = await api.post<{
+      const response = await axios.post<{
         user: User
         access_token: string
         refresh_token: string
-      }>('/auth/signup', { name, email, password })
+      }>(`${API_URL}/auth/signup`, { name, email, password })
 
       const { user, access_token, refresh_token } = response.data
       setAccessToken(access_token)

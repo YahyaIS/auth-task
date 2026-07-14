@@ -10,7 +10,8 @@ frontend/
 │   │   └── AuthContext.tsx        # Auth state, login/signup/logout/initialize
 │   ├── components/
 │   │   ├── Navbar.tsx             # Fixed top navbar with user name + logout
-│   │   └── ProtectedLayout.tsx    # Auth guard + Navbar + Outlet
+│   │   ├── ProtectedLayout.tsx    # Auth guard + Navbar + Outlet
+│   │   └── GuestRoute.tsx         # Redirects authenticated users away from /signin & /signup
 │   ├── pages/
 │   │   ├── SignInPage.tsx         # Email + password form
 │   │   ├── SignUpPage.tsx         # Email + name + password with validation
@@ -38,11 +39,11 @@ frontend/
 | Lucide React      | Icons                       |
 
 ## Routes
-| Path      | Component         | Access     |
-|-----------|-------------------|------------|
-| `/signin` | SignInPage        | Public     |
-| `/signup` | SignUpPage        | Public     |
-| `/`       | DashboardPage     | Protected  |
+| Path      | Component         | Wrapper           | Access                   |
+|-----------|-------------------|-------------------|--------------------------|
+| `/signin` | SignInPage        | GuestRoute        | Redirects to `/` if auth |
+| `/signup` | SignUpPage        | GuestRoute        | Redirects to `/` if auth |
+| `/`       | DashboardPage     | ProtectedLayout   | Redirects to `/signin`   |
 
 ## Auth Flow
 
@@ -50,7 +51,8 @@ frontend/
 - `access_token` (15 min) — stored in memory via `setAccessToken()`
 - `refresh_token` (7 days) — stored in `localStorage`
 - On page load: proactively call `POST /auth/refresh` with stored refresh token, then `GET /auth/me` to restore session
-- On 401 during any request: Axios interceptor catches it, calls `/auth/refresh`, retries the original request
+- The 401 interceptor only applies to protected API calls made with `api` (the intercepted Axios instance). Auth endpoints (`/auth/signin`, `/auth/signup`) use plain `axios.post` directly — a 401 on those means invalid credentials, not token expiry
+- On 401 from a protected call: Axios interceptor catches it, calls `/auth/refresh`, retries the original request
 - On refresh failure: clears tokens and redirects to `/signin`
 
 ### Key Files
@@ -63,6 +65,8 @@ frontend/
 
 **`src/context/AuthContext.tsx`**
 - Provides `{ user, isAuthenticated, isLoading, login, signup, logout }` via React Context
+- Uses plain `axios.post` for `/auth/signin` and `/auth/signup` (bypasses the 401 interceptor — 401 = invalid credentials, not token expiry)
+- Uses intercepted `api` for `/auth/me` after page load (so expired token triggers auto-refresh)
 - `login(email, password)` — `POST /auth/signin`, stores tokens, sets user
 - `signup(name, email, password)` — `POST /auth/signup`, stores tokens, sets user
 - `logout()` — clears tokens and state, redirects to `/signin`
@@ -72,6 +76,12 @@ frontend/
 - Shows spinner while `isLoading` is true
 - Redirects to `/signin` if not authenticated
 - Renders `Navbar` + `<Outlet/>` for authenticated users
+
+**`src/components/GuestRoute.tsx`**
+- Layout route (same pattern as ProtectedLayout)
+- Shows a spinner while `isLoading` is true
+- Redirects authenticated users to `/`
+- Renders `<Outlet/>` for guests
 
 **`src/components/Navbar.tsx`**
 - Fixed top bar with app name on the left
